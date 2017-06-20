@@ -93,3 +93,16 @@ func (p *pong) run(ctx context.Context) {
 	}
 }
 ```
+Output:
+```bash
+2017/06/20 13:34:33 Starting pong
+2017/06/20 13:34:33 Starting ping
+2017/06/20 13:34:34 ping
+2017/06/20 13:34:35 pong
+2017/06/20 13:34:36 ping
+2017/06/20 13:34:37 pong
+2017/06/20 13:34:38 Shutting down pong - sleeping 1 second
+2017/06/20 13:34:38 ping
+2017/06/20 13:34:39 Shutting down ping
+2017/06/20 13:34:39 Exiting main
+```
