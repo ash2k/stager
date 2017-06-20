@@ -33,9 +33,7 @@ func main() {
 	s = st.NextStage()
 	s.StartWithContext(p2.run)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	<-ctx.Done()
+	time.Sleep(5 * time.Second)
 }
 
 type ping struct {
