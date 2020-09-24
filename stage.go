@@ -2,35 +2,30 @@ package stager
 
 import (
 	"context"
-
-	"github.com/ash2k/stager/wait"
 )
 
 type Stage interface {
-	// Start starts f in a new goroutine attached to the Stage.
-	Start(func())
-	// StartWithChannel starts f in a new goroutine attached to the Stage.
-	// Stage context's Done() channel is passed to f as an argument. f should stop when it is available.
-	StartWithChannel(func(stopCh <-chan struct{}))
-	// StartWithContext starts f in a new goroutine attached to the Stage.
-	// Stage context is passed to f as an argument. f should stop when context's Done() channel is available.
-	StartWithContext(func(context.Context))
+	// Go starts f in a new goroutine attached to the Stage.
+	// Stage context is passed to f as an argument. f should stop when context signals done.
+	// If f returns a non-nil error, the stager starts performing shutdown.
+	Go(f func(context.Context) error)
 }
 
 type stage struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	group  wait.Group
+	ctx             context.Context
+	cancelStage     context.CancelFunc
+	cancelStagerRun context.CancelFunc
+	errChan         chan error
+	n               int
 }
 
-func (s *stage) Start(f func()) {
-	s.group.Start(f)
-}
-
-func (s *stage) StartWithChannel(f func(stopCh <-chan struct{})) {
-	s.group.StartWithChannel(s.ctx.Done(), f)
-}
-
-func (s *stage) StartWithContext(f func(context.Context)) {
-	s.group.StartWithContext(s.ctx, f)
+func (s *stage) Go(f func(context.Context) error) {
+	s.n++
+	go func() {
+		err := f(s.ctx)
+		if err != nil {
+			s.cancelStagerRun()
+		}
+		s.errChan <- err
+	}()
 }

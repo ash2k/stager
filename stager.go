@@ -1,6 +1,8 @@
 package stager
 
-import "context"
+import (
+	"context"
+)
 
 type Stager interface {
 	// NextStageWithContext adds a new stage to the Stager.
@@ -8,17 +10,23 @@ type Stager interface {
 	// NextStageWithContext adds a new stage to the Stager. Provided ctxParent is used as the parent context for the
 	// Stage's context.
 	NextStageWithContext(ctxParent context.Context) Stage
-	// Shutdown iterates Stages in reverse order, cancelling their context and waiting for all started goroutines
-	// to finish for each Stage.
-	Shutdown()
+	// Run blocks until ctx signals done or a function in a stage returns a non-nil error.
+	// When it unblocks, it iterates Stages in reverse order. For each stage it cancels
+	// it's context and waits for all started goroutines of that stage to finish.
+	// Then it proceeds to the next stage.
+	Run(ctx context.Context) error
 }
 
 func New() Stager {
-	return &stager{}
+	s := &stager{}
+	s.runCtx, s.runCancel = context.WithCancel(context.Background())
+	return s
 }
 
 type stager struct {
-	stages []*stage
+	stages    []*stage
+	runCtx    context.Context
+	runCancel context.CancelFunc
 }
 
 func (sr *stager) NextStage() Stage {
@@ -28,17 +36,30 @@ func (sr *stager) NextStage() Stage {
 func (sr *stager) NextStageWithContext(ctxParent context.Context) Stage {
 	ctx, cancel := context.WithCancel(ctxParent)
 	st := &stage{
-		ctx:    ctx,
-		cancel: cancel,
+		ctx:             ctx,
+		cancelStage:     cancel,
+		cancelStagerRun: sr.runCancel,
+		errChan:         make(chan error),
 	}
 	sr.stages = append(sr.stages, st)
 	return st
 }
 
-func (sr *stager) Shutdown() {
+func (sr *stager) Run(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+	case <-sr.runCtx.Done():
+	}
+	var firstErr error
 	for i := len(sr.stages) - 1; i >= 0; i-- {
 		st := sr.stages[i]
-		st.cancel()
-		st.group.Wait()
+		st.cancelStage()
+		for i := 0; i < st.n; i++ {
+			err := <-st.errChan
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
 	}
+	return firstErr
 }
