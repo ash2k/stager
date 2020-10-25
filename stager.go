@@ -5,7 +5,7 @@ import (
 )
 
 type Stager interface {
-	// NextStageWithContext adds a new stage to the Stager.
+	// NextStage adds a new stage to the Stager.
 	NextStage() Stage
 	// NextStageWithContext adds a new stage to the Stager. Provided ctxParent is used as the parent context for the
 	// Stage's context.
