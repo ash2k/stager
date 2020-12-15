@@ -39,7 +39,7 @@ func (sr *stager) NextStageWithContext(ctxParent context.Context) Stage {
 		ctx:             ctx,
 		cancelStage:     cancel,
 		cancelStagerRun: sr.runCancel,
-		errChan:         make(chan error),
+		errChan:         make(chan error, 1),
 	}
 	sr.stages = append(sr.stages, st)
 	return st
