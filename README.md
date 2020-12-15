@@ -3,108 +3,74 @@
 Stager is a library to help write code where you are in control of start and shutdown of concurrent operations.
 I.e. you know when goroutines start and stop and in which order.
 
-An [example](example/main.go) is below. `pong` is always shutdown first, and `ping` last:
+An [example](example/main.go) is below:
 ```go
 package main
 
 import (
-	"context"
-	"log"
-	"time"
+  "context"
+  "log"
+  "time"
 
-	"github.com/ash2k/stager"
+  "github.com/ash2k/stager"
 )
 
 func main() {
-	defer log.Print("Exiting main")
-	st := stager.New()
+  defer log.Print("Exiting main")
+  st := stager.New()
 
-	ball := make(chan struct{})
-	p1 := ping{
-		ball: ball,
-	}
-	s := st.NextStage()
-	s.Go(p1.run)
+  s := st.NextStage()
+  s.Go(func(ctx context.Context) error {
+    log.Print("Start 1.1")
+    defer log.Print("Stop 1.1")
+    <-ctx.Done()
+    return nil
+  })
+  s.Go(func(ctx context.Context) error {
+    log.Print("Start 1.2")
+    defer log.Print("Stop 1.2")
+    <-ctx.Done()
+    return nil
+  })
 
-	p2 := pong{
-		ball: ball,
-	}
-	s = st.NextStage()
-	s.Go(p2.run)
+  s = st.NextStage()
+  s.Go(func(ctx context.Context) error {
+    log.Print("Start 2")
+    defer log.Print("Stop 2")
+    <-ctx.Done()
+    return nil
+  })
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	err := st.Run(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+  s = st.NextStage()
+  s.Go(func(ctx context.Context) error {
+    log.Print("Start 3")
+    defer log.Print("Stop 3")
+    <-ctx.Done()
+    return nil
+  })
 
-type ping struct {
-	ball chan struct{}
-}
-
-func (p *ping) run(ctx context.Context) error {
-	log.Print("Starting ping")
-	defer log.Print("Shutting down ping")
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-p.ball:
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(time.Second):
-		}
-		log.Print("ping")
-		select {
-		case <-ctx.Done():
-			return nil
-		case p.ball <- struct{}{}:
-		}
-	}
-}
-
-type pong struct {
-	ball chan struct{}
-}
-
-func (p *pong) run(ctx context.Context) error {
-	log.Print("Starting pong")
-	defer time.Sleep(time.Second)
-	defer log.Print("Shutting down pong - sleeping 1 second")
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case p.ball <- struct{}{}:
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-p.ball:
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(time.Second):
-		}
-		log.Print("pong")
-	}
+  ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+  defer cancel()
+  err := st.Run(ctx)
+  if err != nil {
+    log.Fatal(err)
+  }
 }
 ```
 Output:
-```bash
-2017/06/20 13:34:33 Starting pong
-2017/06/20 13:34:33 Starting ping
-2017/06/20 13:34:34 ping
-2017/06/20 13:34:35 pong
-2017/06/20 13:34:36 ping
-2017/06/20 13:34:37 pong
-2017/06/20 13:34:38 Shutting down pong - sleeping 1 second
-2017/06/20 13:34:38 ping
-2017/06/20 13:34:39 Shutting down ping
-2017/06/20 13:34:39 Exiting main
 ```
+2020/12/15 15:34:41 Start 3
+2020/12/15 15:34:41 Start 1.2
+2020/12/15 15:34:41 Start 1.1
+2020/12/15 15:34:41 Start 2
+2020/12/15 15:34:46 Stop 3
+2020/12/15 15:34:46 Stop 2
+2020/12/15 15:34:46 Stop 1.2
+2020/12/15 15:34:46 Stop 1.1
+2020/12/15 15:34:46 Exiting main
+```
+
+Note the following:
+
+- Shutdown order is deterministic - 3, 2, and then 1.
+- Shutdown order within a stage is not deterministic - 1.1 and 1.2 are not ordered.

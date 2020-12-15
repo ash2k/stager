@@ -12,78 +12,40 @@ func main() {
 	defer log.Print("Exiting main")
 	st := stager.New()
 
-	ball := make(chan struct{})
-	p1 := ping{
-		ball: ball,
-	}
 	s := st.NextStage()
-	s.Go(p1.run)
+	s.Go(func(ctx context.Context) error {
+		log.Print("Start 1.1")
+		defer log.Print("Stop 1.1")
+		<-ctx.Done()
+		return nil
+	})
+	s.Go(func(ctx context.Context) error {
+		log.Print("Start 1.2")
+		defer log.Print("Stop 1.2")
+		<-ctx.Done()
+		return nil
+	})
 
-	p2 := pong{
-		ball: ball,
-	}
 	s = st.NextStage()
-	s.Go(p2.run)
+	s.Go(func(ctx context.Context) error {
+		log.Print("Start 2")
+		defer log.Print("Stop 2")
+		<-ctx.Done()
+		return nil
+	})
+
+	s = st.NextStage()
+	s.Go(func(ctx context.Context) error {
+		log.Print("Start 3")
+		defer log.Print("Stop 3")
+		<-ctx.Done()
+		return nil
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err := st.Run(ctx)
 	if err != nil {
 		log.Fatal(err)
-	}
-}
-
-type ping struct {
-	ball chan struct{}
-}
-
-func (p *ping) run(ctx context.Context) error {
-	log.Print("Starting ping")
-	defer log.Print("Shutting down ping")
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-p.ball:
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(time.Second):
-		}
-		log.Print("ping")
-		select {
-		case <-ctx.Done():
-			return nil
-		case p.ball <- struct{}{}:
-		}
-	}
-}
-
-type pong struct {
-	ball chan struct{}
-}
-
-func (p *pong) run(ctx context.Context) error {
-	log.Print("Starting pong")
-	defer time.Sleep(time.Second)
-	defer log.Print("Shutting down pong - sleeping 1 second")
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case p.ball <- struct{}{}:
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-p.ball:
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(time.Second):
-		}
-		log.Print("pong")
 	}
 }
