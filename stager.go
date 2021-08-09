@@ -63,3 +63,16 @@ func (sr *stager) Run(ctx context.Context) error {
 	}
 	return firstErr
 }
+
+// StageFunc is a function that uses the provided Stage to start goroutines.
+type StageFunc func(Stage)
+
+// RunStages is a helper that ensures Run() is always executed and there is no chance of early exit so that
+// goroutines from stages don't leak.
+func RunStages(ctx context.Context, stages ...StageFunc) error {
+	stgr := New()
+	for _, s := range stages {
+		s(stgr.NextStage())
+	}
+	return stgr.Run(ctx)
+}
