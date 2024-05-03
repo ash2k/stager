@@ -39,7 +39,7 @@ func (sr *stager) NextStageWithContext(ctxParent context.Context) Stage {
 		ctx:             ctx,
 		cancelStage:     cancel,
 		cancelStagerRun: sr.runCancel,
-		errChan:         make(chan error, 1),
+		errChan:         make(chan error),
 	}
 	sr.stages = append(sr.stages, st)
 	return st
@@ -54,7 +54,14 @@ func (sr *stager) Run(ctx context.Context) error {
 	for i := len(sr.stages) - 1; i >= 0; i-- {
 		st := sr.stages[i]
 		st.cancelStage()
-		for i := 0; i < st.n; i++ {
+		for _, whenDone := range st.whenDone {
+			whenDone := whenDone
+			go func() {
+				st.errChan <- whenDone()
+			}()
+		}
+		n := st.n + len(st.whenDone)
+		for i := 0; i < n; i++ {
 			err := <-st.errChan
 			if firstErr == nil {
 				firstErr = err

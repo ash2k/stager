@@ -166,3 +166,103 @@ func TestEmptyStagerStops(t *testing.T) {
 		}
 	})
 }
+
+func TestGoWhenDone_NoOtherGoroutines(t *testing.T) {
+	st := New()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	ran := 0
+
+	s := st.NextStage()
+	s.GoWhenDone(func() error {
+		ran++
+		return nil
+	})
+
+	err := st.Run(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ran != 1 {
+		t.Fatal(ran)
+	}
+}
+
+func TestGoWhenDone_WithOtherGoroutines(t *testing.T) {
+	st := New()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	ran := 0
+
+	s := st.NextStage()
+	s.Go(func(ctx context.Context) error {
+		return nil
+	})
+	s.GoWhenDone(func() error {
+		ran++
+		return nil
+	})
+
+	err := st.Run(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ran != 1 {
+		t.Fatal(ran)
+	}
+}
+
+func TestGoWhenDone_Error(t *testing.T) {
+	st := New()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	ran := 0
+
+	e := errors.New("boom")
+
+	s := st.NextStage()
+	s.GoWhenDone(func() error {
+		ran++
+		return e
+	})
+
+	err := st.Run(ctx)
+	if err != e {
+		t.Fatal(err)
+	}
+	if ran != 1 {
+		t.Fatal(ran)
+	}
+}
+
+func TestGoWhenDone_ErrorFromOtherGoroutine(t *testing.T) {
+	st := New()
+
+	ran := 0
+
+	e1 := errors.New("boom1")
+	e2 := errors.New("boom2")
+
+	s := st.NextStage()
+	s.Go(func(ctx context.Context) error {
+		return e1
+	})
+	s.GoWhenDone(func() error {
+		ran++
+		return e2
+	})
+
+	err := st.Run(context.Background())
+	if err != e1 {
+		t.Fatal(err)
+	}
+	if ran != 1 {
+		t.Fatal(ran)
+	}
+}
