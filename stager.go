@@ -18,8 +18,14 @@ type Stager interface {
 }
 
 func New() Stager {
+	return NewWithContext(context.Background())
+}
+
+// NewWithContext allows to set the context used for all the stages.
+// Only values are propagated from the parent context, cancellation is not.
+func NewWithContext(ctx context.Context) Stager {
 	s := &stager{}
-	s.runCtx, s.runCancel = context.WithCancel(context.Background())
+	s.runCtx, s.runCancel = context.WithCancel(context.WithoutCancel(ctx))
 	return s
 }
 
